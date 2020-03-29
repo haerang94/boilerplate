@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
-
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const saltRounds = 10;
 const userSchema = mongoose.Schema({
   name: {
     type: String,
@@ -30,6 +32,43 @@ const userSchema = mongoose.Schema({
     type: Number
   }
 });
+//비밀 번호를 암호화 시킨다
+userSchema.pre("save", function(next) {
+  var user = this;
+
+  if (user.isModified("password")) {
+    bcrypt.genSalt(saltRounds, function(err, salt) {
+      if (err) return next(err);
+
+      bcrypt.hash(user.password, salt, function(err, hash) {
+        if (err) return next(err);
+        user.password = hash;
+        next();
+      });
+    });
+  } else {
+    next();
+  }
+}); // 유저정보를 저장하기 전에 처리하는 작업
+
+userSchema.methods.comparePassword = function(plainPassword, cb) {
+  bcrypt.compare(plainPassword, this.password, function(err, isMatch) {
+    if (err) return cb(err);
+    cb(null, isMatch);
+  });
+};
+
+userSchema.methods.generateToken = function(cb) {
+  var user = this;
+  //jsonwebtoken을 이용해서 token을 생성하기
+  var token = jwt.sign(user._id.toHexString(), "secretToken");
+  //   user._id + "secretToken" = token;
+  user.token = token;
+  user.save((err, user) => {
+    if (err) return cb(err);
+    cb(null, user);
+  });
+};
 
 const User = mongoose.model("User", userSchema);
 
